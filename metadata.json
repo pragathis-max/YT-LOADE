@@ -1,0 +1,6 @@
+{
+  "name": "YT LOADE",
+  "description": "A modern YouTube video and audio downloader with metadata preview, real oEmbed integrations, interactive download status tracker, and historical logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
