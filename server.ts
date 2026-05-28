@@ -49,9 +49,14 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Server] Web App active on host 0.0.0.0, port ${PORT}`);
   });
+
+  // Ensure socket connections stay active for large media packages
+  server.timeout = 25 * 60 * 1000; // 25 minutes
+  server.keepAliveTimeout = 25 * 60 * 1000;
+  server.headersTimeout = (25 * 60 * 1000) + 5000;
 }
 
 startServer().catch((err) => {
