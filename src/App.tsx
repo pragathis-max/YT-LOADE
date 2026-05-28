@@ -147,7 +147,7 @@ export default function App() {
 
         // ATOMIC ACTION: Direct Browser Trigger to server physical attachment stream!
         // This makes the download completely real to the client computer!
-        const downloadUrl = `/api/download?title=${encodeURIComponent(metadata.title)}&quality=${encodeURIComponent(selectedFormat.quality)}&type=${encodeURIComponent(formatType)}`;
+        const downloadUrl = `/api/download?url=${encodeURIComponent(videoUrl)}&title=${encodeURIComponent(metadata.title)}&quality=${encodeURIComponent(selectedFormat.quality)}&type=${encodeURIComponent(formatType)}`;
         
         const anchor = document.createElement("a");
         anchor.href = downloadUrl;

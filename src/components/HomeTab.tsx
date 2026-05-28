@@ -83,6 +83,18 @@ export default function HomeTab({ onStartDownload, settings }: HomeTabProps) {
 
     try {
       const resp = await fetch(`/api/video-info?url=${encodeURIComponent(checkUrl)}`);
+      
+      if (!resp.ok) {
+        const text = await resp.text();
+        let errMsg = `Server returned error status ${resp.status}`;
+        try {
+          const parsed = JSON.parse(text);
+          errMsg = parsed.error || errMsg;
+        } catch (_) {}
+        setErrorMsg(`Extraction Failed: ${errMsg}`);
+        return;
+      }
+
       const data = await resp.json();
 
       if (data.success) {
@@ -96,8 +108,9 @@ export default function HomeTab({ onStartDownload, settings }: HomeTabProps) {
       } else {
         setErrorMsg(data.error || "Could not retrieve info. Video is blocked or private.");
       }
-    } catch (err) {
-      setErrorMsg("Connection to extraction server timed out. Check connection.");
+    } catch (err: any) {
+      console.error("Fetch metadata error:", err);
+      setErrorMsg(`Connection Error: ${err?.message || "Failed to reach extraction backend. Check your local or server connection."}`);
     } finally {
       setIsLoading(false);
     }

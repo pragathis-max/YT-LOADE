@@ -1,6 +1,4 @@
-import { Request, Response } from "express";
-
-export default async function handler(req: Request, res: Response): Promise<any> {
+export default async function handler(req: any, res: any): Promise<any> {
   const rawUrl = req.query.url as string;
   if (!rawUrl) {
     return res.status(400).json({ success: false, error: "URL is required" });
@@ -89,9 +87,11 @@ export default async function handler(req: Request, res: Response): Promise<any>
 
     // Prepare distinct dynamic download options & realistic sizes based on metadata
     const formats = [
+      { quality: "4K (2160p)", type: "mp4", size: "284.1 MB", fps: 60, scale: 2.0 },
       { quality: "1080p", type: "mp4", size: "94.2 MB", fps: 60, scale: 1.0 },
       { quality: "720p", type: "mp4", size: "48.5 MB", fps: 30, scale: 0.5 },
       { quality: "360p", type: "mp4", size: "18.1 MB", fps: 30, scale: 0.2 },
+      { quality: "320kbps", type: "mp3", size: "9.8 MB", fps: null, scale: 0.1 },
       { quality: "128kbps", type: "mp3", size: "4.3 MB", fps: null, scale: 0.05 }
     ];
 
