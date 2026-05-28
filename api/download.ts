@@ -62,12 +62,19 @@ export default async function handler(req: any, res: any): Promise<any> {
             if (data && (data.status === "success" || data.status === "redirect" || data.status === "stream") && data.url) {
               console.log(`[Stream Proxy] Successfully extracted source media link: ${data.url}`);
 
-              // Request the actual media from YouTube/Vimeo CDN matching this server's requesting IP
+              // Create a stream controller which links browser cancellation to resource releasing
+              const streamController = new AbortController();
+              req.on("close", () => {
+                console.log(`[Stream Proxy] Client connection closed. Terminating stream proxy connection.`);
+                streamController.abort();
+              });
+
+              // Request the actual media stream matching our server requesting IP
               const mediaResponse = await fetch(data.url, {
                 headers: {
                   "User-Agent": requestHeaders["User-Agent"]
                 },
-                signal: AbortSignal.timeout(15000) // 15s to establish connection
+                signal: streamController.signal
               });
 
               if (mediaResponse.ok && mediaResponse.body) {
