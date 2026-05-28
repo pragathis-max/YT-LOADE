@@ -1,8 +1,13 @@
+import { Readable } from "stream";
+
 export default async function handler(req: any, res: any): Promise<any> {
   const videoUrl = req.query.url as string;
   const title = (req.query.title as string) || "video";
   const quality = (req.query.quality as string) || "720p";
   const type = (req.query.type as string) || "mp4";
+
+  const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "download";
+  const filename = `${safeTitle}_[${quality}].${type}`;
 
   if (videoUrl) {
     try {
@@ -22,39 +27,80 @@ export default async function handler(req: any, res: any): Promise<any> {
         url: videoUrl,
         videoQuality: videoQuality,
         audioFormat: "mp3",
-        audioBitrate: qLower.includes("320") ? "320" : "128",
-        isAudioOnly: type === "mp3",
-        filenamePattern: "pretty"
+        isAudioOnly: type === "mp3"
       };
 
-      // Call public extraction backend of Cobalt Tools
-      const response = await fetch("https://api.cobalt.tools/api/json", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-      });
+      // Resilient collection of public high-availability Cobalt nodes
+      const COBALT_NODES = [
+        "https://api.cobalt.tools/api/json",
+        "https://cobalt.shizuku.io/api/json",
+        "https://cobalt-api.l06.dev/api/json",
+        "https://cobalt.any.ms/api/json"
+      ];
 
-      if (response.ok) {
-        const data: any = await response.json();
-        if (data && (data.status === "success" || data.status === "redirect" || data.status === "stream") && data.url) {
-          // Instruct client response code redirect to target genuine source link
-          res.writeHead(302, { Location: data.url });
-          res.end();
-          return;
+      // Masquerade as a genuine desktop browser to bypass Cloudflare/bot blocks
+      const requestHeaders = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Origin": "https://cobalt.tools",
+        "Referer": "https://cobalt.tools/"
+      };
+
+      for (const node of COBALT_NODES) {
+        try {
+          console.log(`[Stream Proxy] Requesting media URL from node: ${node}`);
+          const response = await fetch(node, {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(6000) // 6s fast failover
+          });
+
+          if (response.ok) {
+            const data: any = await response.json();
+            if (data && (data.status === "success" || data.status === "redirect" || data.status === "stream") && data.url) {
+              console.log(`[Stream Proxy] Successfully extracted source media link: ${data.url}`);
+
+              // Request the actual media from YouTube/Vimeo CDN matching this server's requesting IP
+              const mediaResponse = await fetch(data.url, {
+                headers: {
+                  "User-Agent": requestHeaders["User-Agent"]
+                },
+                signal: AbortSignal.timeout(15000) // 15s to establish connection
+              });
+
+              if (mediaResponse.ok && mediaResponse.body) {
+                console.log(`[Stream Proxy] Server-to-client proxy streaming activated.`);
+                res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+                res.setHeader("Content-Type", mediaResponse.headers.get("content-type") || (type === "mp3" ? "audio/mpeg" : "video/mp4"));
+
+                const contentLength = mediaResponse.headers.get("content-length");
+                if (contentLength) {
+                  res.setHeader("Content-Length", contentLength);
+                }
+
+                Readable.fromWeb(mediaResponse.body as any).pipe(res);
+                return;
+              } else {
+                console.warn(`[Stream Proxy] Media chunk download from extraction URL returned status ${mediaResponse.status}`);
+              }
+            }
+          } else {
+            console.warn(`[Stream Proxy] Extraction node ${node} returned error code ${response.status}`);
+          }
+        } catch (nodeErr: any) {
+          console.error(`[Stream Proxy] Error communicating with node ${node}:`, nodeErr?.message || nodeErr);
         }
       }
-    } catch (err) {
-      console.error("Direct download fetch via Cobalt tools timed out or failed:", err);
+    } catch (err: any) {
+      console.error("[Stream Proxy] Global downloader exception:", err?.message || err);
     }
   }
 
   // Backup fallback streamer
-  const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "download";
-  const filename = `${safeTitle}_[${quality}].${type}`;
-
+  console.log("[Stream Proxy] All high-availability nodes timed out or failed. Activating backup fallback stream...");
+  
   if (type === "mp3") {
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
